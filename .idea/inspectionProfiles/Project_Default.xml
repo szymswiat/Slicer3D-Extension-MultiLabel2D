@@ -1,0 +1,74 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="Eslint" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="HttpUrlsUsage" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredUrls">
+        <list>
+          <option value="http://localhost" />
+          <option value="http://127.0.0.1" />
+          <option value="http://www.w3.org/2000/svg" />
+          <option value="http://www.w3.org/2000/10/XMLSchema" />
+          <option value="http://www.w3.org/2001/XMLSchema" />
+          <option value="http://www.w3.org/2001/XMLSchema-instance" />
+          <option value="http://www.w3.org/2003/03/wsdl" />
+          <option value="http://json-schema.org/draft" />
+          <option value="http://java.sun.com/xml/ns/" />
+          <option value="http://xmlns.jcp.org/xml/ns/" />
+          <option value="http://javafx.com/javafx/" />
+          <option value="http://javafx.com/fxml" />
+          <option value="http://maven.apache.org/xsd/" />
+          <option value="http://maven.apache.org/POM/" />
+          <option value="http://www.springframework.org/schema/" />
+          <option value="http://www.thymeleaf.org" />
+          <option value="http://www.ibm.com/webservices/xsd" />
+          <option value="http://schemas.xmlsoap.org/" />
+          <option value="http://cxf.apache.org/schemas/" />
+          <option value="http://{config[" />
+          <option value="http://{sio_config[" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="MicroPythonRequirements" enabled="false" level="WARNING" enabled_by_default="false" />
+    <inspection_tool class="PyAsyncCallInspection" enabled="false" level="WARNING" enabled_by_default="false" />
+    <inspection_tool class="PyCompatibilityInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ourVersions">
+        <value>
+          <list size="1">
+            <item index="0" class="java.lang.String" itemvalue="3.10" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="14">
+            <item index="0" class="java.lang.String" itemvalue="pytorch-lightning" />
+            <item index="1" class="java.lang.String" itemvalue="torch" />
+            <item index="2" class="java.lang.String" itemvalue="albumentations" />
+            <item index="3" class="java.lang.String" itemvalue="monai" />
+            <item index="4" class="java.lang.String" itemvalue="tensorboard" />
+            <item index="5" class="java.lang.String" itemvalue="opencv-python" />
+            <item index="6" class="java.lang.String" itemvalue="icevision" />
+            <item index="7" class="java.lang.String" itemvalue="matplotlib" />
+            <item index="8" class="java.lang.String" itemvalue="segmentation-models-pytorch" />
+            <item index="9" class="java.lang.String" itemvalue="numpy" />
+            <item index="10" class="java.lang.String" itemvalue="efficientnet-pytorch" />
+            <item index="11" class="java.lang.String" itemvalue="astral" />
+            <item index="12" class="java.lang.String" itemvalue="neptune-client-0.10.4" />
+            <item index="13" class="java.lang.String" itemvalue="psutil-5.8.0" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="N812" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="YAMLSchemaValidation" enabled="false" level="WARNING" enabled_by_default="false" />
+  </profile>
+</component>
