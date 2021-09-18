@@ -1,5 +1,5 @@
 #-----------------------------------------------------------------------------
-set(MODULE_NAME MultiLabel2D)
+set(MODULE_NAME SegmentEditorMultiLabel2D)
 
 #-----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS

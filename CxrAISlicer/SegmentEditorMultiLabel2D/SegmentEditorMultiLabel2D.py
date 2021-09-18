@@ -17,7 +17,7 @@ try:
 except ModuleNotFoundError:
     pass
 
-logger = logging.getLogger('MultiLabel2D')
+logger = logging.getLogger('SegmentEditorMultiLabel2D')
 
 
 class VolumeNotSelected(Exception):
@@ -25,29 +25,29 @@ class VolumeNotSelected(Exception):
 
 
 #
-# MultiLabel2D
+# SegmentEditorMultiLabel2D
 #
 
-class MultiLabel2D(ScriptedLoadableModule):
+class SegmentEditorMultiLabel2D(ScriptedLoadableModule):
     """Uses ScriptedLoadableModule base class, available at:
     https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
     """
 
     def __init__(self, parent):
         ScriptedLoadableModule.__init__(self, parent)
-        self.parent.title = "MultiLabel2D"
+        self.parent.title = "Segment Editor Multi-Label 2D"
         self.parent.categories = ['', 'CxrAI']
         self.parent.dependencies = ['SegmentEditor', 'Segmentations']
         self.parent.contributors = ["szymswiat"]
-        self.parent.helpText = 'MultiLabel2D'
-        self.parent.acknowledgementText = 'MultiLabel2D'
+        self.parent.helpText = 'SegmentEditorMultiLabel2D'
+        self.parent.acknowledgementText = 'SegmentEditorMultiLabel2D'
 
 
 #
-# MultiLabel2DWidget
+# SegmentEditorMultiLabel2DWidget
 #
 
-class MultiLabel2DWidget(SegmentEditorWidget):
+class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
     """Uses ScriptedLoadableModuleWidget base class, available at:
     https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
     """
@@ -58,7 +58,7 @@ class MultiLabel2DWidget(SegmentEditorWidget):
         """
         SegmentEditorWidget.__init__(self, parent)
 
-        self.logic: MultiLabel2DLogic = None
+        self.logic: SegmentEditorMultiLabel2DLogic = None
         self._ui = None
         self._editor_ui = None
         self._segment_labels: List[str] = None
@@ -84,7 +84,7 @@ class MultiLabel2DWidget(SegmentEditorWidget):
         # seg_editor_widget: SegmentEditorWidget = slicer.modules.segmenteditor.createNewWidgetRepresentation()
         # Load widget from .ui file (created by Qt Designer).
         # Additional widgets can be instantiated manually and added to self.layout.
-        ui_widget = slicer.util.loadUI(self.resourcePath('UI/MultiLabel2D.ui'))
+        ui_widget = slicer.util.loadUI(self.resourcePath('UI/SegmentEditorMultiLabel2D.ui'))
         self.layout.addWidget(ui_widget)
         # self.layout.addWidget(seg_editor_widget)
         self._ui = slicer.util.childWidgetVariables(ui_widget)
@@ -107,7 +107,7 @@ class MultiLabel2DWidget(SegmentEditorWidget):
         self._ui.volumeSelector.setMRMLScene(slicer.mrmlScene)
         self._ui.volumeSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.on_volume_node_changed)
 
-        self.logic = MultiLabel2DLogic()
+        self.logic = SegmentEditorMultiLabel2DLogic()
 
         defaultSegmentEditorNode = slicer.vtkMRMLSegmentEditorNode()
         defaultSegmentEditorNode.SetOverwriteMode(slicer.vtkMRMLSegmentEditorNode.OverwriteNone)
@@ -249,10 +249,10 @@ class MultiLabel2DWidget(SegmentEditorWidget):
 
 
 #
-# MultiLabel2DLogic
+# SegmentEditorMultiLabel2DLogic
 #
 
-class MultiLabel2DLogic(ScriptedLoadableModuleLogic):
+class SegmentEditorMultiLabel2DLogic(ScriptedLoadableModuleLogic):
     """This class should implement all the actual
     computation done by your module.  The interface
     should be such that other python code can import
@@ -271,10 +271,10 @@ class MultiLabel2DLogic(ScriptedLoadableModuleLogic):
     #
 
 
-# MultiLabel2DTest
+# SegmentEditorMultiLabel2DTest
 #
 
-class MultiLabel2DTest(ScriptedLoadableModuleTest):
+class SegmentEditorMultiLabel2DTest(ScriptedLoadableModuleTest):
     """
     This is the test case for your scripted module.
     Uses ScriptedLoadableModuleTest base class, available at:
@@ -290,9 +290,9 @@ class MultiLabel2DTest(ScriptedLoadableModuleTest):
         """Run as few or as many tests as needed here.
         """
         self.setUp()
-        self.test_MultiLabel2D1()
+        self.test_SegmentEditorMultiLabel2D1()
 
-    def test_MultiLabel2D1(self):
+    def test_SegmentEditorMultiLabel2D1(self):
         """ Ideally you should have several levels of tests.  At the lowest level
         tests should exercise the functionality of the logic with different inputs
         (both valid and invalid).  At higher levels your tests should emulate the

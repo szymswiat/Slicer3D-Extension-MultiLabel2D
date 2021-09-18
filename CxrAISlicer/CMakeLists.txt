@@ -19,7 +19,7 @@ include(${Slicer_USE_FILE})
 
 #-----------------------------------------------------------------------------
 # Extension modules
-add_subdirectory(MultiLabel2D)
+add_subdirectory(SegmentEditorMultiLabel2D)
 ## NEXT_MODULE
 
 #-----------------------------------------------------------------------------
