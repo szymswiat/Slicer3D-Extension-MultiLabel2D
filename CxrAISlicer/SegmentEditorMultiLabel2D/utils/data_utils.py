@@ -1,4 +1,5 @@
-from typing import Dict, Optional
+from collections import OrderedDict
+from typing import Dict, Optional, List, Tuple
 
 import MRMLCorePython as mp
 import numpy as np
@@ -13,9 +14,15 @@ except ModuleNotFoundError:
     pass
 
 
+def generate_colors(count: int, seed: int) -> List[Tuple[float, ...]]:
+    np.random.seed(seed)
+    return [tuple(np.random.rand(3).astype(float)) for _ in range(count)]
+
+
 def load_segments_from_h5(
         volume_node: mp.vtkMRMLScalarVolumeNode,
-        seg_file_path: str
+        seg_file_path: str,
+        segment_labels: List[str]
 ) -> mp.vtkMRMLSegmentationNode:
     seg_node: mp.vtkMRMLSegmentationNode = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode',
                                                                          by_name=volume_node.GetName())
@@ -25,8 +32,15 @@ def load_segments_from_h5(
     seg_node = node_utils.create_segment_node_for_volume(volume_node)
 
     seg_file = h5py.File(seg_file_path, mode='r')
-
     seg_data = seg_file['segmentations']
+
+    colors = generate_colors(len(segment_labels), 0)
+    label_colors = OrderedDict(list(zip(segment_labels, colors)))
+
+    for i, es in enumerate(sorted(seg_data)):
+        if es not in label_colors:
+            label_colors[es] = generate_colors(1, i)[0]
+
     for segment_name in sorted(seg_data):
         ds = seg_data[segment_name]
         mask_shape = ds.attrs['mask_shape']
@@ -38,7 +52,7 @@ def load_segments_from_h5(
         # slice_start
         ss = mask_coords
         # slice_end
-        se = [c + s for c, s in zip(mask_coords, mask_shape) ]
+        se = [c + s for c, s in zip(mask_coords, mask_shape)]
 
         mask[ss[0]: se[0], ss[1]: se[1], ss[2]: se[2]] = mask_arr
 
@@ -46,7 +60,7 @@ def load_segments_from_h5(
             segment_name,
             seg_node,
             mask if np.count_nonzero(mask) else None,
-            color=ds.attrs['color']
+            color=label_colors[segment_name]
         )
 
     return seg_node
@@ -62,7 +76,7 @@ def write_segments_to_h5(
     for segment_name, data in segment_data.items():
         ds = seg_group.create_dataset(segment_name, data=np.packbits(data['mask']), compression='gzip')
         ds.attrs.create('mask_shape', data=data['mask'].shape)
-        ds.attrs.create('color', data=np.array(data['segment'].GetColor(), dtype=float))
+        # ds.attrs.create('color', data=np.array(data['segment'].GetColor(), dtype=float))
         ds.attrs.create('volume_shape', data=data['volume_shape'])
         ds.attrs.create('mask_coords', data=data['coords'])
 

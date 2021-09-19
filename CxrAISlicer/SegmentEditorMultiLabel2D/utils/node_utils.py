@@ -1,5 +1,6 @@
+from collections import OrderedDict
 from pathlib import Path
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Tuple
 
 import MRMLCorePython as mp
 import numpy as np
@@ -27,20 +28,27 @@ def create_empty_segments(
         seg_node: mp.vtkMRMLSegmentationNode,
         segment_labels: List[str]
 ):
-    np.random.seed(0)
+    from utils import data_utils
+    segmentation: vtkSegmentation = seg_node.GetSegmentation()
+    existing_segments = [segmentation.GetNthSegment(i).GetName()
+                         for i in range(segmentation.GetNumberOfSegments())]
 
-    for seg_name in segment_labels:
+    colors = data_utils.generate_colors(len(segment_labels), 0)
+    label_colors = OrderedDict(list(zip(segment_labels, colors)))
+
+    for seg_name, color in label_colors.items():
+        if seg_name in existing_segments:
+            continue
         segment_id = create_new_segment(seg_name, seg_node)
-        segmentation: vtkSegmentation = seg_node.GetSegmentation()
         segment = segmentation.GetSegment(segment_id)
-        segment.SetColor(list(np.random.rand(3).astype(float)))
+        segment.SetColor(color)
 
 
 def create_new_segment(
         name: str,
         seg_node: mp.vtkMRMLSegmentationNode,
         initial_value: np.ndarray = None,
-        color: List[float] = None
+        color: Tuple[float, ...] = None
 ) -> str:
     segment_id = seg_node.GetSegmentation().AddEmptySegment('', name, color)
     if initial_value is not None:

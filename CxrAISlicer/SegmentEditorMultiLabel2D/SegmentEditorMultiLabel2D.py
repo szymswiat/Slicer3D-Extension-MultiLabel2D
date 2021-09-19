@@ -1,7 +1,7 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 import MRMLCorePython as mp
 import qt
@@ -82,7 +82,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         # Buttons
         self._ui.saveSegmentsButton.connect('clicked(bool)', self.on_save_segments_button)
         self._ui.loadSegmentsButton.connect('clicked(bool)', self.on_load_segments_button)
-        self._ui.initializeSegmentsButton.connect('clicked(bool)', self.on_initialize_segments_for_current_volume)
+        self._ui.fillSegmentsButton.connect('clicked(bool)', self.on_fill_segments_button)
         self._ui.loadLabelListButton.connect('clicked(bool)', self.on_load_label_list_button)
 
         self._ui.volumeSelector.nodeTypes = ["vtkMRMLScalarVolumeNode"]
@@ -117,20 +117,26 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         SegmentEditorWidget.enter(self)
 
     @property
-    def segment_labels(self) -> List[str]:
+    def segment_labels(self) -> Optional[List[str]]:
         if self._segment_labels is not None:
             return self._segment_labels
 
         labels_file_path = self._config_dir() / 'labels.txt'
+        try:
+            with open(labels_file_path, 'r') as f:
+                lines = [line.strip() for line in f.readlines()]
+                for line in lines:
+                    if len(line) > 100:
+                        raise ValueError()
+                self._segment_labels = list(sorted(lines))
 
-        with open(labels_file_path, 'r') as f:
-            lines = [line.strip() for line in f.readlines()]
-            for line in lines:
-                if len(line) > 100:
-                    raise ValueError()
-            self._segment_labels = list(sorted(lines))
-
-        return self._segment_labels
+            return self._segment_labels
+        except ValueError:
+            slicer.util.errorDisplay('Invalid label list. Cannot initialize segmentation list.')
+            return None
+        except FileNotFoundError:
+            slicer.util.errorDisplay('Cannot fint label list file.')
+            return None
 
     def on_load_label_list_button(self):
         file_path = qt.QFileDialog().getOpenFileName()
@@ -184,7 +190,10 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
             ):
                 return
 
-        seg_node = data_utils.load_segments_from_h5(volume_node, file_path)
+        labels = self.segment_labels
+        if labels is None:
+            return
+        seg_node = data_utils.load_segments_from_h5(volume_node, file_path, labels)
         self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
 
     def on_load_segments_all_button(self):
@@ -203,30 +212,29 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
                         text=f'Do you want to override segmentations of {name} volume?.',
                 ):
                     continue
-            data_utils.load_segments_from_h5(volume_node, segment_file_path.as_posix())
+            labels = self.segment_labels
+            if labels is None:
+                return
+            data_utils.load_segments_from_h5(volume_node, segment_file_path.as_posix(), labels)
 
-    def on_initialize_segments_for_current_volume(self):
+    def on_fill_segments_button(self):
         try:
             volume_node = self._get_current_volume()
         except VolumeNotSelected:
             return
-        try:
-            labels = self.segment_labels
-        except ValueError:
-            slicer.util.errorDisplay('Invalid label list. Cannot initialize segmentation list.')
-            return
-        except FileNotFoundError:
-            slicer.util.errorDisplay('Cannot fint label list file.')
+
+        labels = self.segment_labels
+        if labels is None:
             return
 
         seg_node = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode', volume_node.GetName())
 
         if seg_node is None:
             seg_node = node_utils.create_segment_node_for_volume(volume_node)
-            self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
-            node_utils.create_empty_segments(seg_node, labels)
-        else:
-            slicer.util.warningDisplay('Segmentation list is already initialized.')
+
+        self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
+
+        node_utils.create_empty_segments(seg_node, labels)
 
     def on_volume_node_changed(self, volume_node: mp.vtkMRMLScalarVolumeNode):
         if volume_node is None:
