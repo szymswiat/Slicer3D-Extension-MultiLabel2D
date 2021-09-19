@@ -1,7 +1,7 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import MRMLCorePython as mp
 import qt
@@ -104,6 +104,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
         # self._editor_ui.SegmentationNodeComboBox.enabled = False
         # self._editor_ui.MasterVolumeNodeComboBox.enabled = False
+        self._setup_shortcuts()
 
     def cleanup(self):
         """
@@ -240,6 +241,8 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
         if seg_node_visible is None:
             self._editor_ui.SegmentationNodeComboBox.setCurrentNode(None)
+            for _, seg_node in seg_nodes.items():
+                seg_node.SetDisplayVisibility(False)
             return
 
         seg_node_visible.SetDisplayVisibility(True)
@@ -247,6 +250,33 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
             seg_node.SetDisplayVisibility(False)
 
         self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node_visible)
+
+    def change_volume(self, direction: str):
+        nodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+
+        if len(nodes) == 0:
+            return
+
+        volume_node_id = self._ui.volumeSelector.currentNodeID
+        if volume_node_id == '':
+            self._ui.volumeSelector.setCurrentNode(nodes[0])
+            return
+
+        current_idx = nodes.index(slicer.util.getNode(volume_node_id))
+
+        if direction == 'prev':
+            current_idx -= 1
+        elif direction == 'next':
+            current_idx += 1
+        else:
+            raise ValueError()
+
+        if current_idx == -1:
+            current_idx += len(nodes)
+        if current_idx == len(nodes):
+            current_idx = 0
+
+        self._ui.volumeSelector.setCurrentNode(nodes[current_idx])
 
     def _get_current_volume(self) -> mp.vtkMRMLScalarVolumeNode:
         volume_node_id = self._ui.volumeSelector.currentNodeID
@@ -259,6 +289,17 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
     def _config_dir(self) -> Path:
         return Path(slicer.app.slicerUserSettingsFilePath).parent
+
+    def _setup_shortcuts(self):
+        shortcuts = [
+            ['Ctrl+,', lambda: self.change_volume('prev')],
+            ['Ctrl+.', lambda: self.change_volume('next')]
+        ]
+
+        for key, callback in shortcuts:
+            shortcut = qt.QShortcut(slicer.util.mainWindow())
+            shortcut.setKey(qt.QKeySequence(key))
+            shortcut.connect("activated()", callback)
 
 
 #
