@@ -8,9 +8,8 @@ import qt
 import slicer
 from SegmentEditor import SegmentEditorWidget
 from slicer.ScriptedLoadableModule import *
-from vtkSegmentationCorePython import vtkSegmentation
 
-from utils import node_utils, data_utils
+from utils import node_utils, data_utils, VolumeNotSelected
 
 try:
     import h5py
@@ -18,10 +17,6 @@ except ModuleNotFoundError:
     pass
 
 logger = logging.getLogger('SegmentEditorMultiLabel2D')
-
-
-class VolumeNotSelected(Exception):
-    pass
 
 
 #
@@ -132,7 +127,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
             for line in lines:
                 if len(line) > 100:
                     raise ValueError()
-            self._segment_labels = lines
+            self._segment_labels = list(sorted(lines))
 
         return self._segment_labels
 
@@ -229,6 +224,8 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
             seg_node = node_utils.create_segment_node_for_volume(volume_node)
             self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
             node_utils.create_empty_segments(seg_node, labels)
+        else:
+            slicer.util.warningDisplay('Segmentation list is already initialized.')
 
     def on_volume_node_changed(self, volume_node: mp.vtkMRMLScalarVolumeNode):
         if volume_node is None:
@@ -242,26 +239,14 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         seg_node_visible: mp.vtkMRMLSegmentationNode = seg_nodes.pop(volume_node.GetName(), None)
 
         if seg_node_visible is None:
+            self._editor_ui.SegmentationNodeComboBox.setCurrentNode(None)
             return
 
-        # for _, seg_node in seg_nodes.items():
-        #     self.set_visibility_of_segments_for_segment_node(seg_node, False)
-        #
-        # self.set_visibility_of_segments_for_segment_node(seg_node_visible, True)
+        seg_node_visible.SetDisplayVisibility(True)
+        for _, seg_node in seg_nodes.items():
+            seg_node.SetDisplayVisibility(False)
+
         self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node_visible)
-
-    def set_visibility_of_segments_for_segment_node(self, seg_node: mp.vtkMRMLSegmentationNode, visible: bool):
-        segmentation: vtkSegmentation = seg_node.GetSegmentation()
-        segment_ids = [segmentation.GetNthSegmentID(i) for i in range(segmentation.GetNumberOfSegments())]
-
-        if visible:
-            self._editor_ui.SegmentsTableView.setSelectedSegmentIDs(segment_ids)
-            self._editor_ui.SegmentsTableView.showOnlySelectedSegments()
-            self._editor_ui.SegmentsTableView.clearSelection()
-
-        else:
-            self._editor_ui.SegmentsTableView.clearSelection()
-            self._editor_ui.SegmentsTableView.showOnlySelectedSegments()
 
     def _get_current_volume(self) -> mp.vtkMRMLScalarVolumeNode:
         volume_node_id = self._ui.volumeSelector.currentNodeID

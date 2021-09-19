@@ -1,0 +1,3 @@
+
+class VolumeNotSelected(Exception):
+    pass

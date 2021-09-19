@@ -27,7 +27,7 @@ def load_segments_from_h5(
     seg_file = h5py.File(seg_file_path, mode='r')
 
     seg_data = seg_file['segmentations']
-    for segment_name in seg_data:
+    for segment_name in sorted(seg_data):
         ds = seg_data[segment_name]
         mask_shape = ds.attrs['mask_shape']
         mask_coords = ds.attrs['mask_coords']
