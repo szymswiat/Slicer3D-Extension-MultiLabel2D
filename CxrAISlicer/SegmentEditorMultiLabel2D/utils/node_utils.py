@@ -1,17 +1,14 @@
 from pathlib import Path
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union
 
 import MRMLCorePython as mp
 import numpy as np
 import slicer
-from MRMLCorePython import vtkMRMLDisplayNode
 from slicer.util import updateVolumeFromArray
-from vtkSegmentationCorePython import vtkSegmentation, vtkSegment
-import random
+from vtkSegmentationCorePython import vtkSegmentation
 
 try:
     import h5py
-    import pandas
 except ModuleNotFoundError:
     pass
 
@@ -50,36 +47,6 @@ def create_new_segment(
         updateSegmentBinaryLabelmapFromArray(initial_value, seg_node, segment_id)
 
     return segment_id
-
-
-def get_mask_segments_for_volume(
-        volume_node: mp.vtkMRMLScalarVolumeNode
-) -> Optional[Dict[str, np.ndarray]]:
-    seg_node: mp.vtkMRMLSegmentationNode = get_nodes_by_class('vtkMRMLSegmentationNode', volume_node.GetName())
-
-    if seg_node is None:
-        slicer.util.errorDisplay(f'There is no segmentation node for current volume node.')
-        return None
-
-    seg: vtkSegmentation = seg_node.GetSegmentation()
-
-    all_segments = {}
-
-    segments = [seg.GetNthSegment(i) for i in range(seg.GetNumberOfSegments())]
-    for segment in segments:
-        segment_id = seg_node.GetSegmentation().GetSegmentIdBySegmentName(segment.GetName())
-
-        segment_array = np.zeros(shape=slicer.util.arrayFromVolume(volume_node).shape, dtype=np.uint8)
-
-        segment_mask: np.ndarray = slicer.util.arrayFromSegmentBinaryLabelmap(seg_node, segment_id)
-        mask_coords = seg_node.GetBinaryLabelmapInternalRepresentation(segment_id).GetExtent()
-        mc = mask_coords
-
-        if -1 not in mask_coords:
-            segment_array[mc[4]:mc[5] + 1, mc[2]:mc[3] + 1, mc[0]:mc[1] + 1] = segment_mask
-        all_segments[segment.GetName()] = segment_array
-
-    return all_segments
 
 
 def get_path_of_node(node) -> Path:

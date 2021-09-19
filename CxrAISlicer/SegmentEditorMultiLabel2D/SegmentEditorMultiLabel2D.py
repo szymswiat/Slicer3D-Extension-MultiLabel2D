@@ -1,4 +1,5 @@
 import logging
+import shutil
 from pathlib import Path
 from typing import List, Dict
 
@@ -13,7 +14,6 @@ from utils import node_utils, data_utils
 
 try:
     import h5py
-    import pandas
 except ModuleNotFoundError:
     pass
 
@@ -70,34 +70,25 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
         try:
             import h5py
-            import pandas
         except ModuleNotFoundError:
             if slicer.util.confirmOkCancelDisplay(
                     "This module requires following Python packages: "
-                    "'h5py', 'pandas'. Click OK to install now."
+                    "'h5py'. Click OK to install now."
             ):
                 slicer.util.pip_install('h5py')
-                slicer.util.pip_install('pandas')
             import h5py
-            import pandas
 
-        # seg_editor_widget: SegmentEditorWidget = slicer.modules.segmenteditor.createNewWidgetRepresentation()
-        # Load widget from .ui file (created by Qt Designer).
-        # Additional widgets can be instantiated manually and added to self.layout.
         ui_widget = slicer.util.loadUI(self.resourcePath('UI/SegmentEditorMultiLabel2D.ui'))
         self.layout.addWidget(ui_widget)
-        # self.layout.addWidget(seg_editor_widget)
         self._ui = slicer.util.childWidgetVariables(ui_widget)
 
-        # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
-        # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
-        # "setMRMLScene(vtkMRMLScene*)" slot.
         ui_widget.setMRMLScene(slicer.mrmlScene)
 
         # Buttons
         self._ui.saveSegmentsButton.connect('clicked(bool)', self.on_save_segments_button)
         self._ui.loadSegmentsButton.connect('clicked(bool)', self.on_load_segments_button)
         self._ui.initializeSegmentsButton.connect('clicked(bool)', self.on_initialize_segments_for_current_volume)
+        self._ui.loadLabelListButton.connect('clicked(bool)', self.on_load_label_list_button)
 
         self._ui.volumeSelector.nodeTypes = ["vtkMRMLScalarVolumeNode"]
         self._ui.volumeSelector.selectNodeUponCreation = True
@@ -134,10 +125,25 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         if self._segment_labels is not None:
             return self._segment_labels
 
-        with open('/home/szymswiat/dev/CxrAI/illnesses.txt', 'r') as f:
-            self._segment_labels = f.readlines()
+        labels_file_path = self._config_dir() / 'labels.txt'
+
+        with open(labels_file_path, 'r') as f:
+            lines = [line.strip() for line in f.readlines()]
+            for line in lines:
+                if len(line) > 100:
+                    raise ValueError()
+            self._segment_labels = lines
 
         return self._segment_labels
+
+    def on_load_label_list_button(self):
+        file_path = qt.QFileDialog().getOpenFileName()
+        if file_path == '':
+            return
+
+        shutil.copy(file_path, self._config_dir() / 'labels.txt')
+
+        slicer.util.infoDisplay('Label list copied to internal storage.')
 
     def on_save_segments_button(self):
         try:
@@ -149,27 +155,38 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         if save_dir == '':
             return
 
-        masks = node_utils.get_mask_segments_for_volume(volume_node)
+        segment_data = data_utils.get_segments_data_for_volume(volume_node)
 
-        mask_file_name = Path(save_dir, f'{Path(volume_node.GetName()).stem}.h5.seg')
+        mask_file_name = Path(save_dir, f'{Path(volume_node.GetName()).stem}.seg')
         if mask_file_name.exists():
-            if slicer.util.confirmOkCancelDisplay(
+            if not slicer.util.confirmOkCancelDisplay(
                     windowTitle='File already exists.',
-                    text=f'File {mask_file_name.name} found under selected directory {mask_file_name.parent}.',
+                    text=f'File {mask_file_name.name} found under selected directory {mask_file_name.parent}. '
+                         f'Do you want to override it?',
             ):
                 return
 
-        data_utils.write_segments_to_h5(mask_file_name.as_posix(), masks)
+        data_utils.write_segments_to_h5(mask_file_name.as_posix(), segment_data)
 
     def on_load_segments_button(self):
-        file_path = qt.QFileDialog().getOpenFileName()
-        if file_path == '':
-            return
-
         try:
             volume_node = self._get_current_volume()
         except VolumeNotSelected:
             return
+
+        file_path = qt.QFileDialog().getOpenFileName()
+        if file_path == '':
+            return
+
+        seg_node: mp.vtkMRMLSegmentationNode = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode',
+                                                                             by_name=volume_node.GetName())
+
+        if seg_node is not None:
+            if not slicer.util.confirmOkCancelDisplay(
+                    windowTitle='Segmentations exist.',
+                    text=f'Existing segmentations will be removed. Continue?',
+            ):
+                return
 
         seg_node = data_utils.load_segments_from_h5(volume_node, file_path)
         self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
@@ -180,14 +197,14 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
             return
 
         for name, volume_node in node_utils.get_nodes_by_class('vtkMRMLScalarVolumeNode').items():
-            segment_file_path = Path(load_dir, f'{Path(name).stem}.h5.seg')
+            segment_file_path = Path(load_dir, f'{Path(name).stem}.seg')
             if not segment_file_path.exists():
                 continue
             seg_node = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode', by_name=name)
             if seg_node is not None:
                 if not slicer.util.confirmOkCancelDisplay(
                         windowTitle='Discard changes.',
-                        text=f'Do you want to override segments of {name} volume?.',
+                        text=f'Do you want to override segmentations of {name} volume?.',
                 ):
                     continue
             data_utils.load_segments_from_h5(volume_node, segment_file_path.as_posix())
@@ -197,13 +214,21 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
             volume_node = self._get_current_volume()
         except VolumeNotSelected:
             return
+        try:
+            labels = self.segment_labels
+        except ValueError:
+            slicer.util.errorDisplay('Invalid label list. Cannot initialize segmentation list.')
+            return
+        except FileNotFoundError:
+            slicer.util.errorDisplay('Cannot fint label list file.')
+            return
 
         seg_node = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode', volume_node.GetName())
 
         if seg_node is None:
             seg_node = node_utils.create_segment_node_for_volume(volume_node)
             self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
-            node_utils.create_empty_segments(seg_node, self.segment_labels)
+            node_utils.create_empty_segments(seg_node, labels)
 
     def on_volume_node_changed(self, volume_node: mp.vtkMRMLScalarVolumeNode):
         if volume_node is None:
@@ -246,6 +271,9 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
             raise VolumeNotSelected()
 
         return slicer.util.getNode(volume_node_id)
+
+    def _config_dir(self) -> Path:
+        return Path(slicer.app.slicerUserSettingsFilePath).parent
 
 
 #
