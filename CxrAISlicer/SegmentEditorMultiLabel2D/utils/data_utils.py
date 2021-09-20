@@ -5,13 +5,10 @@ import MRMLCorePython as mp
 import numpy as np
 import slicer
 from vtkSegmentationCorePython import vtkSegmentation, vtkOrientedImageData
+import zarr
+from numcodecs import Blosc
 
 from utils import node_utils
-
-try:
-    import h5py
-except ModuleNotFoundError:
-    pass
 
 
 def generate_colors(count: int, seed: int) -> List[Tuple[float, ...]]:
@@ -31,7 +28,8 @@ def load_segments_from_h5(
 
     seg_node = node_utils.create_segment_node_for_volume(volume_node)
 
-    seg_file = h5py.File(seg_file_path, mode='r')
+    store = zarr.ZipStore(seg_file_path, mode='r')
+    seg_file = zarr.open(store=store)
     seg_data = seg_file['segmentations']
 
     colors = generate_colors(len(segment_labels), 0)
@@ -63,6 +61,7 @@ def load_segments_from_h5(
             color=label_colors[segment_name]
         )
 
+    store.close()
     return seg_node
 
 
@@ -70,17 +69,19 @@ def write_segments_to_h5(
         file_name: str,
         segment_data: Dict
 ):
-    seg_file = h5py.File(file_name, mode='w')
-    seg_group = seg_file.create_group('segmentations')
+    with zarr.ZipStore(file_name, mode='w') as store:
+        compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
+        seg_file = zarr.open(store=store)
 
-    for segment_name, data in segment_data.items():
-        ds = seg_group.create_dataset(segment_name, data=np.packbits(data['mask']), compression='gzip')
-        ds.attrs.create('mask_shape', data=data['mask'].shape)
-        # ds.attrs.create('color', data=np.array(data['segment'].GetColor(), dtype=float))
-        ds.attrs.create('volume_shape', data=data['volume_shape'])
-        ds.attrs.create('mask_coords', data=data['coords'])
-
-    seg_file.close()
+        seg_group = seg_file.create_group('segmentations')
+        for segment_name, data in segment_data.items():
+            ds = seg_group.create_dataset(segment_name,
+                                          data=np.packbits(data['mask'].astype(np.uint8)),
+                                          compressor=compressor)
+            ds.attrs['mask_shape'] = list(data['mask'].shape)
+            # ds.attrs.create('color', data=np.array(data['segment'].GetColor(), dtype=float))
+            ds.attrs['volume_shape'] = list(data['volume_shape'])
+            ds.attrs['mask_coords'] = list(data['coords'])
 
 
 def get_segments_data_for_volume(

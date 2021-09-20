@@ -1,20 +1,22 @@
+import slicer
+
+try:
+    import zarr
+except ModuleNotFoundError:
+    slicer.util.pip_install('zarr')
+
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Optional
 
 import MRMLCorePython as mp
 import qt
-import slicer
+
 from SegmentEditor import SegmentEditorWidget
 from slicer.ScriptedLoadableModule import *
 
 from utils import node_utils, data_utils, VolumeNotSelected
-
-try:
-    import h5py
-except ModuleNotFoundError:
-    pass
 
 logger = logging.getLogger('SegmentEditorMultiLabel2D')
 
@@ -63,16 +65,6 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         Called when the user opens the module the first time and the widget is initialized.
         """
 
-        try:
-            import h5py
-        except ModuleNotFoundError:
-            if slicer.util.confirmOkCancelDisplay(
-                    "This module requires following Python packages: "
-                    "'h5py'. Click OK to install now."
-            ):
-                slicer.util.pip_install('h5py')
-            import h5py
-
         ui_widget = slicer.util.loadUI(self.resourcePath('UI/SegmentEditorMultiLabel2D.ui'))
         self.layout.addWidget(ui_widget)
         self._ui = slicer.util.childWidgetVariables(ui_widget)
@@ -95,9 +87,9 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
         self.logic = SegmentEditorMultiLabel2DLogic()
 
-        defaultSegmentEditorNode = slicer.vtkMRMLSegmentEditorNode()
-        defaultSegmentEditorNode.SetOverwriteMode(slicer.vtkMRMLSegmentEditorNode.OverwriteNone)
-        slicer.mrmlScene.AddDefaultNode(defaultSegmentEditorNode)
+        default_segment_editor_node = slicer.vtkMRMLSegmentEditorNode()
+        default_segment_editor_node.SetOverwriteMode(slicer.vtkMRMLSegmentEditorNode.OverwriteNone)
+        slicer.mrmlScene.AddDefaultNode(default_segment_editor_node)
 
         SegmentEditorWidget.setup(self)
         self._editor_ui = slicer.util.childWidgetVariables(self.editor)
@@ -146,6 +138,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         shutil.copy(file_path, self._config_dir() / 'labels.txt')
 
         slicer.util.infoDisplay('Label list copied to internal storage.')
+        self._segment_labels = None
 
     def on_save_segments_button(self):
         try:
