@@ -25,6 +25,14 @@
        <property name="enabled">
         <bool>true</bool>
        </property>
+       <property name="nodeTypes">
+        <stringlist>
+         <string>vtkMRMLScalarVolumeNode</string>
+        </stringlist>
+       </property>
+       <property name="addEnabled">
+        <bool>false</bool>
+       </property>
       </widget>
      </item>
      <item>

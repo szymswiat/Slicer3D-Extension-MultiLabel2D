@@ -1,5 +1,6 @@
 import slicer
 from MRMLCorePython import vtkMRMLSegmentationNode, vtkMRMLScalarVolumeNode, vtkMRMLScene
+from slicer.util import VTKObservationMixin
 
 from zarr_io import SlicerSegmentZarrWriter, SlicerSegmentZarrReader
 
@@ -15,7 +16,6 @@ from typing import List, Dict, Optional
 
 import qt
 
-from SegmentEditor import SegmentEditorWidget
 from slicer.ScriptedLoadableModule import *
 
 from utils import node_utils, VolumeNotSelected
@@ -46,7 +46,7 @@ class SegmentEditorMultiLabel2D(ScriptedLoadableModule):
 # SegmentEditorMultiLabel2DWidget
 #
 
-class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
+class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     """Uses ScriptedLoadableModuleWidget base class, available at:
     https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
     """
@@ -55,11 +55,15 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         """
         Called when the user opens the module the first time and the widget is initialized.
         """
-        SegmentEditorWidget.__init__(self, parent)
+        ScriptedLoadableModuleWidget.__init__(self, parent)
+        VTKObservationMixin.__init__(self)
 
         self.logic: SegmentEditorMultiLabel2DLogic = None
-        self._ui = None
-        self._editor_ui = None
+
+        self._self_ui = None
+        self._vol_ui = None
+        self._se_ui = None
+
         self._segment_labels: List[str] = None
 
         self._scene: vtkMRMLScene = None
@@ -68,55 +72,63 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         """
         Called when the user opens the module the first time and the widget is initialized.
         """
+        ScriptedLoadableModuleWidget.setup(self)
+
         self._scene: vtkMRMLScene = slicer.mrmlScene
 
         ui_widget = slicer.util.loadUI(self.resourcePath('UI/SegmentEditorMultiLabel2D.ui'))
+        volumes_ui_widget = slicer.modules.volumes.createNewWidgetRepresentation()
+        segment_editor_ui_widget = slicer.modules.segmenteditor.createNewWidgetRepresentation()
+
         self.layout.addWidget(ui_widget)
-        self._ui = slicer.util.childWidgetVariables(ui_widget)
+        self.layout.addWidget(segment_editor_ui_widget)
+        self.layout.addWidget(volumes_ui_widget)
+
+        self._self_ui = slicer.util.childWidgetVariables(ui_widget)
+        self._vol_ui = slicer.util.childWidgetVariables(volumes_ui_widget)
+        self._se_ui = slicer.util.childWidgetVariables(segment_editor_ui_widget)
 
         ui_widget.setMRMLScene(self._scene)
 
-        # Buttons
-        self._ui.saveSegmentsButton.connect('clicked(bool)', self.on_save_segments_button)
-        self._ui.loadSegmentsButton.connect('clicked(bool)', self.on_load_segments_button)
-        self._ui.loadAllSegmentsButton.connect('clicked(bool)', self.on_load_all_segments_button)
-        self._ui.fillSegmentsButton.connect('clicked(bool)', self.on_fill_segments_button)
-        self._ui.loadLabelListButton.connect('clicked(bool)', self.on_load_label_list_button)
+        self.setup_self_ui()
+        self.setup_ui_defaults()
 
-        self._ui.prevVolumeButton.connect('clicked(bool)', lambda: self.on_change_volume('prev'))
-        self._ui.nextVolumeButton.connect('clicked(bool)', lambda: self.on_change_volume('next'))
-        self._ui.closeVolumeButton.connect('clicked(bool)', self.on_close_current_volume)
-
-        self._ui.volumeSelector.nodeTypes = ["vtkMRMLScalarVolumeNode"]
-        self._ui.volumeSelector.selectNodeUponCreation = True
-        self._ui.volumeSelector.addEnabled = False
-        self._ui.volumeSelector.removeEnabled = True
-        self._ui.volumeSelector.showHidden = False
-        self._ui.volumeSelector.setMRMLScene(self._scene)
-        self._ui.volumeSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.on_volume_node_changed)
+        self._setup_shortcuts()
 
         self.logic = SegmentEditorMultiLabel2DLogic()
 
-        default_segment_editor_node = slicer.vtkMRMLSegmentEditorNode()
-        default_segment_editor_node.SetOverwriteMode(slicer.vtkMRMLSegmentEditorNode.OverwriteNone)
-        self._scene.AddDefaultNode(default_segment_editor_node)
-
-        # setup parent widget
-        SegmentEditorWidget.setup(self)
-        self._editor_ui = slicer.util.childWidgetVariables(self.editor)
-
-        # self._editor_ui.SegmentationNodeComboBox.enabled = False
-        # self._editor_ui.MasterVolumeNodeComboBox.enabled = False
-        self._setup_shortcuts()
+        volumes_ui_widget.setMaximumSize(5000, 500)
+        volumes_ui_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+        segment_editor_ui_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
 
     def cleanup(self):
         """
         Called when the application closes and the module widget is destroyed.
         """
-        SegmentEditorWidget.cleanup(self)
+        pass
 
     def enter(self):
-        SegmentEditorWidget.enter(self)
+        pass
+
+    def setup_self_ui(self):
+        # Buttons
+        self._self_ui.saveSegmentsButton.connect('clicked(bool)', self.on_save_segments_button)
+        self._self_ui.loadSegmentsButton.connect('clicked(bool)', self.on_load_segments_button)
+        self._self_ui.loadAllSegmentsButton.connect('clicked(bool)', self.on_load_all_segments_button)
+        self._self_ui.fillSegmentsButton.connect('clicked(bool)', self.on_fill_segments_button)
+        self._self_ui.loadLabelListButton.connect('clicked(bool)', self.on_load_label_list_button)
+
+        self._self_ui.prevVolumeButton.connect('clicked(bool)', lambda: self.on_change_volume('prev'))
+        self._self_ui.nextVolumeButton.connect('clicked(bool)', lambda: self.on_change_volume('next'))
+        self._self_ui.closeVolumeButton.connect('clicked(bool)', self.on_close_current_volume)
+
+        self._self_ui.volumeSelector.setMRMLScene(self._scene)
+        self._self_ui.volumeSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.on_volume_node_changed)
+
+    def setup_ui_defaults(self):
+        default_segment_editor_node = slicer.vtkMRMLSegmentEditorNode()
+        default_segment_editor_node.SetOverwriteMode(slicer.vtkMRMLSegmentEditorNode.OverwriteNone)
+        self._scene.AddDefaultNode(default_segment_editor_node)
 
     @property
     def segment_labels(self) -> Optional[List[str]]:
@@ -248,7 +260,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         with SlicerSegmentZarrReader(file_path) as reader:
             reader.read_to_segmentation_node(seg_node, labels)
 
-        self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
+        self._se_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
 
     def on_fill_segments_button(self):
         try:
@@ -265,7 +277,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         if seg_node is None:
             seg_node = node_utils.create_segment_node_for_volume(volume_node)
 
-        self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
+        self._se_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
 
         node_utils.create_empty_segments(seg_node, labels)
 
@@ -282,7 +294,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         seg_node_visible: vtkMRMLSegmentationNode = seg_nodes.pop(volume_node.GetName(), None)
 
         if seg_node_visible is None:
-            self._editor_ui.SegmentationNodeComboBox.setCurrentNode(None)
+            self._se_ui.SegmentationNodeComboBox.setCurrentNode(None)
             for _, seg_node in seg_nodes.items():
                 seg_node.SetDisplayVisibility(False)
             return
@@ -291,7 +303,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         for _, seg_node in seg_nodes.items():
             seg_node.SetDisplayVisibility(False)
 
-        self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node_visible)
+        self._se_ui.SegmentationNodeComboBox.setCurrentNode(seg_node_visible)
 
     def on_close_current_volume(self):
         try:
@@ -317,9 +329,10 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         if len(nodes) == 0:
             return
 
-        volume_node_id = self._ui.volumeSelector.currentNodeID
+        volume_node_id = self._self_ui.volumeSelector.currentNodeID
         if volume_node_id == '':
-            self._ui.volumeSelector.setCurrentNode(nodes[0])
+            self._self_ui.volumeSelector.setCurrentNode(nodes[0])
+            self._vol_ui.ActiveVolumeNodeSelector.setCurrentNode(nodes[0])
             return
 
         current_idx = nodes.index(slicer.util.getNode(volume_node_id))
@@ -336,10 +349,11 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         if current_idx == len(nodes):
             current_idx = 0
 
-        self._ui.volumeSelector.setCurrentNode(nodes[current_idx])
+        self._self_ui.volumeSelector.setCurrentNode(nodes[current_idx])
+        self._vol_ui.ActiveVolumeNodeSelector.setCurrentNode(nodes[current_idx])
 
     def _get_current_volume(self, display_info=True) -> vtkMRMLScalarVolumeNode:
-        volume_node_id = self._ui.volumeSelector.currentNodeID
+        volume_node_id = self._self_ui.volumeSelector.currentNodeID
 
         if volume_node_id == '':
             if display_info:
@@ -353,8 +367,8 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
     def _setup_shortcuts(self):
         shortcuts = [
-            ['Ctrl+,', lambda: self.on_change_volume('prev')],
-            ['Ctrl+.', lambda: self.on_change_volume('next')]
+            ['Ctrl+Left', lambda: self.on_change_volume('prev')],
+            ['Ctrl+Right', lambda: self.on_change_volume('next')]
         ]
 
         for key, callback in shortcuts:
