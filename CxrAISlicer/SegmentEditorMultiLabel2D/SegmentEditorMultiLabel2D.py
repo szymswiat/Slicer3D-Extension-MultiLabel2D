@@ -1,8 +1,4 @@
 import slicer
-from MRMLCorePython import vtkMRMLSegmentationNode, vtkMRMLScalarVolumeNode, vtkMRMLScene
-from slicer.util import VTKObservationMixin
-
-from zarr_io import SlicerSegmentZarrWriter, SlicerSegmentZarrReader
 
 try:
     import zarr
@@ -10,17 +6,20 @@ except ModuleNotFoundError:
     slicer.util.pip_install('zarr')
 
 import logging
-import shutil
-from pathlib import Path
-from typing import List, Dict, Optional
-
+import requests
 import qt
 
+from typing import List, Dict, Optional
+from slicer.util import VTKObservationMixin
 from slicer.ScriptedLoadableModule import *
-
 from utils import node_utils, VolumeNotSelected
+from zarr_io import SlicerSegmentZarrWriter, SlicerSegmentZarrReader
+from MRMLCorePython import vtkMRMLSegmentationNode, vtkMRMLScalarVolumeNode, vtkMRMLScene
+from pathlib import Path
 
 logger = logging.getLogger('SegmentEditorMultiLabel2D')
+
+LABEL_LIST_URL = 'https://gist.github.com/Szymswiat/c3eaf19a87e6671194c9bea6ef48bc7c/raw'
 
 
 #
@@ -101,6 +100,8 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         volumes_ui_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
         segment_editor_ui_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
 
+        self.fetch_label_list()
+
     def cleanup(self):
         """
         Called when the application closes and the module widget is destroyed.
@@ -116,7 +117,6 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         self._self_ui.loadSegmentsButton.connect('clicked(bool)', self.on_load_segments_button)
         self._self_ui.loadAllSegmentsButton.connect('clicked(bool)', self.on_load_all_segments_button)
         self._self_ui.fillSegmentsButton.connect('clicked(bool)', self.on_fill_segments_button)
-        self._self_ui.loadLabelListButton.connect('clicked(bool)', self.on_load_label_list_button)
 
         self._self_ui.prevVolumeButton.connect('clicked(bool)', lambda: self.on_change_volume('prev'))
         self._self_ui.nextVolumeButton.connect('clicked(bool)', lambda: self.on_change_volume('next'))
@@ -152,14 +152,24 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
             slicer.util.errorDisplay('Cannot fint label list file.')
             return None
 
-    def on_load_label_list_button(self):
-        file_path = qt.QFileDialog().getOpenFileName()
-        if file_path == '':
+    def fetch_label_list(self):
+        response = requests.get(LABEL_LIST_URL)
+
+        if response.status_code != 200:
+            logger.error('Unable to fetch label list, please check your internet connection.')
             return
 
-        shutil.copy(file_path, self._config_dir() / 'labels.txt')
+        labels = []
+        content = response.content.decode('UTF-8')
+        for line in content.split('\n'):
+            parts = line.split(',')
+            if parts[2].strip() == 'TRUE':
+                labels.append(parts[1] + '\n')
 
-        slicer.util.infoDisplay('Label list copied to internal storage.')
+        with open(self._config_dir() / 'labels.txt', 'w') as f:
+            f.writelines(sorted(labels))
+
+        logger.info('Label list downloaded and saved.')
         self._segment_labels = None
 
     def on_save_segments_button(self):

@@ -120,13 +120,6 @@
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
-      <widget class="QPushButton" name="loadLabelListButton">
-       <property name="text">
-        <string>Load label list</string>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QPushButton" name="fillSegmentsButton">
        <property name="text">
         <string>Fill segments</string>
