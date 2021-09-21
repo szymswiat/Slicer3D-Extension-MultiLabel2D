@@ -1,4 +1,7 @@
 import slicer
+from MRMLCorePython import vtkMRMLSegmentationNode, vtkMRMLScalarVolumeNode
+
+from zarr_io import SlicerSegmentZarrWriter, SlicerSegmentZarrReader
 
 try:
     import zarr
@@ -10,13 +13,12 @@ import shutil
 from pathlib import Path
 from typing import List, Dict, Optional
 
-import MRMLCorePython as mp
 import qt
 
 from SegmentEditor import SegmentEditorWidget
 from slicer.ScriptedLoadableModule import *
 
-from utils import node_utils, data_utils, VolumeNotSelected
+from utils import node_utils, VolumeNotSelected
 
 logger = logging.getLogger('SegmentEditorMultiLabel2D')
 
@@ -150,8 +152,6 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         if save_dir == '':
             return
 
-        segment_data = data_utils.get_segments_data_for_volume(volume_node)
-
         mask_file_name = Path(save_dir, f'{Path(volume_node.GetName()).stem}.seg')
         if mask_file_name.exists():
             if not slicer.util.confirmOkCancelDisplay(
@@ -161,7 +161,15 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
             ):
                 return
 
-        data_utils.write_segments_to_h5(mask_file_name.as_posix(), segment_data)
+        # noinspection PyTypeChecker
+        seg_node: vtkMRMLSegmentationNode = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode',
+                                                                          volume_node.GetName())
+        if seg_node is None:
+            slicer.util.errorDisplay(f'There is no segmentation node for current volume node.')
+            return
+
+        with SlicerSegmentZarrWriter(mask_file_name) as writer:
+            writer.write_segmentation_node(seg_node)
 
     def on_load_segments_button(self):
         try:
@@ -173,21 +181,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         if file_path == '':
             return
 
-        seg_node: mp.vtkMRMLSegmentationNode = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode',
-                                                                             by_name=volume_node.GetName())
-
-        if seg_node is not None:
-            if not slicer.util.confirmOkCancelDisplay(
-                    windowTitle='Segmentations exist.',
-                    text=f'Existing segmentations will be removed. Continue?',
-            ):
-                return
-
-        labels = self.segment_labels
-        if labels is None:
-            return
-        seg_node = data_utils.load_segments_from_h5(volume_node, file_path, labels)
-        self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
+        self.load_segments_for_volume(volume_node, Path(file_path))
 
     def on_load_segments_all_button(self):
         load_dir = qt.QFileDialog().getExistingDirectory()
@@ -198,17 +192,37 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
             segment_file_path = Path(load_dir, f'{Path(name).stem}.seg')
             if not segment_file_path.exists():
                 continue
-            seg_node = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode', by_name=name)
-            if seg_node is not None:
-                if not slicer.util.confirmOkCancelDisplay(
-                        windowTitle='Discard changes.',
-                        text=f'Do you want to override segmentations of {name} volume?.',
-                ):
-                    continue
-            labels = self.segment_labels
-            if labels is None:
+
+            # noinspection PyTypeChecker
+            self.load_segments_for_volume(volume_node, segment_file_path)
+
+    def load_segments_for_volume(
+            self,
+            volume_node: vtkMRMLScalarVolumeNode,
+            file_path: Path
+    ):
+        # noinspection PyTypeChecker
+        seg_node: vtkMRMLSegmentationNode = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode',
+                                                                          by_name=volume_node.GetName())
+        if seg_node is not None:
+            if not slicer.util.confirmOkCancelDisplay(
+                    windowTitle=f'Segmentation data exists for volume: {volume_node.GetName()}.',
+                    text=f'Existing segmentation data will be removed. Continue?',
+            ):
                 return
-            data_utils.load_segments_from_h5(volume_node, segment_file_path.as_posix(), labels)
+            else:
+                slicer.mrmlScene.RemoveNode(seg_node)
+
+        seg_node = node_utils.create_segment_node_for_volume(volume_node)
+
+        labels = self.segment_labels
+        if labels is None:
+            return
+
+        with SlicerSegmentZarrReader(file_path) as reader:
+            reader.read_to_segmentation_node(seg_node, labels)
+
+        self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
 
     def on_fill_segments_button(self):
         try:
@@ -229,7 +243,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
         node_utils.create_empty_segments(seg_node, labels)
 
-    def on_volume_node_changed(self, volume_node: mp.vtkMRMLScalarVolumeNode):
+    def on_volume_node_changed(self, volume_node: vtkMRMLScalarVolumeNode):
         if volume_node is None:
             logger.error(f'No scalar volume selected.')
             return
@@ -237,8 +251,9 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
         slicer.util.setSliceViewerLayers(background=volume_node)
 
-        seg_nodes: Dict[str, mp.vtkMRMLSegmentationNode] = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode')
-        seg_node_visible: mp.vtkMRMLSegmentationNode = seg_nodes.pop(volume_node.GetName(), None)
+        # noinspection PyTypeChecker
+        seg_nodes: Dict[str, vtkMRMLSegmentationNode] = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode')
+        seg_node_visible: vtkMRMLSegmentationNode = seg_nodes.pop(volume_node.GetName(), None)
 
         if seg_node_visible is None:
             self._editor_ui.SegmentationNodeComboBox.setCurrentNode(None)
@@ -279,7 +294,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
         self._ui.volumeSelector.setCurrentNode(nodes[current_idx])
 
-    def _get_current_volume(self) -> mp.vtkMRMLScalarVolumeNode:
+    def _get_current_volume(self) -> vtkMRMLScalarVolumeNode:
         volume_node_id = self._ui.volumeSelector.currentNodeID
 
         if volume_node_id == '':

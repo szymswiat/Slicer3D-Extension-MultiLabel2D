@@ -2,17 +2,18 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import List, Dict, Union, Tuple
 
-import MRMLCorePython as mp
 import numpy as np
 import slicer
-from slicer.util import updateVolumeFromArray
+from MRMLCorePython import vtkMRMLScalarVolumeNode, vtkMRMLSegmentationNode, vtkMRMLNode
 from vtkSegmentationCorePython import vtkSegmentation
+
+from utils import generate_colors
 
 
 def create_segment_node_for_volume(
-        volume_node: mp.vtkMRMLScalarVolumeNode
-) -> mp.vtkMRMLSegmentationNode:
-    seg_node: mp.vtkMRMLSegmentationNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLSegmentationNode')
+        volume_node: vtkMRMLScalarVolumeNode
+) -> vtkMRMLSegmentationNode:
+    seg_node: vtkMRMLSegmentationNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLSegmentationNode')
     seg_node.SetName(volume_node.GetName())
     seg_node.SetReferenceImageGeometryParameterFromVolumeNode(volume_node)
     seg_node.SetMasterRepresentationToBinaryLabelmap()
@@ -20,15 +21,14 @@ def create_segment_node_for_volume(
 
 
 def create_empty_segments(
-        seg_node: mp.vtkMRMLSegmentationNode,
+        seg_node: vtkMRMLSegmentationNode,
         segment_labels: List[str]
 ):
-    from utils import data_utils
     segmentation: vtkSegmentation = seg_node.GetSegmentation()
     existing_segments = [segmentation.GetNthSegment(i).GetName()
                          for i in range(segmentation.GetNumberOfSegments())]
 
-    colors = data_utils.generate_colors(len(segment_labels), 0)
+    colors = generate_colors(len(segment_labels), 0)
     label_colors = OrderedDict(list(zip(segment_labels, colors)))
 
     for seg_name, color in label_colors.items():
@@ -41,7 +41,7 @@ def create_empty_segments(
 
 def create_new_segment(
         name: str,
-        seg_node: mp.vtkMRMLSegmentationNode,
+        seg_node: vtkMRMLSegmentationNode,
         initial_value: np.ndarray = None,
         color: Tuple[float, ...] = None
 ) -> str:
@@ -65,7 +65,7 @@ def get_path_of_node(node) -> Path:
 def get_nodes_by_class(
         cls: str,
         by_name: str = None
-) -> Union[mp.vtkMRMLNode, Dict[str, mp.vtkMRMLNode]]:
+) -> Union[vtkMRMLNode, Dict[str, vtkMRMLNode]]:
     nodes = slicer.util.getNodesByClass(cls)
     nodes = {n.GetName(): n for n in nodes}
     if by_name:
