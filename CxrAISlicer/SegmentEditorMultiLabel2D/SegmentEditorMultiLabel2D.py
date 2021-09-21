@@ -325,7 +325,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
 
         if seg_node is not None:
             if slicer.util.confirmOkCancelDisplay(
-                    windowTitle=f'Removing current volume {volume_node.GetName()}.',
+                    windowTitle=f'Removing volume {volume_node.GetName()}.',
                     text=f'Do you want to discard existing segments?',
             ):
                 self._scene.RemoveNode(volume_node)

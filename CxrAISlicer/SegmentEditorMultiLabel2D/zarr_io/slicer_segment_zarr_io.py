@@ -50,7 +50,7 @@ class SlicerSegmentZarrWriter(SegmentationZarrWriter):
 
             segment_mask: np.ndarray = slicer.util.arrayFromSegmentBinaryLabelmap(seg_node, segment_id)
 
-            self.write_segmentation(segment.GetName(), segment_mask)
+            self.write_segmentation(segment.GetName(), segment_mask.astype(np.uint8))
             written_segment_ids.append(segment_id)
 
         return written_segment_ids

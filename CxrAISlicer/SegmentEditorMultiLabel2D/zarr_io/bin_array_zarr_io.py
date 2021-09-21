@@ -68,8 +68,7 @@ class BinArrayZarrWriter:
             group: zarr.Group,
             attrs: Dict[str, Any] = None
     ) -> zarr.Array:
-        assert bin_array.dtype != np.uint8
-        assert bin_array.dtype != np.bool
+        assert bin_array.dtype == np.uint8
 
         if np.count_nonzero(bin_array) == 0:
             empty = True
