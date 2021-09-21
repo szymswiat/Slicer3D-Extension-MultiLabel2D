@@ -76,8 +76,13 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         # Buttons
         self._ui.saveSegmentsButton.connect('clicked(bool)', self.on_save_segments_button)
         self._ui.loadSegmentsButton.connect('clicked(bool)', self.on_load_segments_button)
+        self._ui.loadAllSegmentsButton.connect('clicked(bool)', self.on_load_all_segments_button)
         self._ui.fillSegmentsButton.connect('clicked(bool)', self.on_fill_segments_button)
         self._ui.loadLabelListButton.connect('clicked(bool)', self.on_load_label_list_button)
+
+        self._ui.prevVolumeButton.connect('clicked(bool)', lambda: self.on_change_volume('prev'))
+        self._ui.nextVolumeButton.connect('clicked(bool)', lambda: self.on_change_volume('next'))
+        self._ui.closeVolumeButton.connect('clicked(bool)', self.on_close_current_volume)
 
         self._ui.volumeSelector.nodeTypes = ["vtkMRMLScalarVolumeNode"]
         self._ui.volumeSelector.selectNodeUponCreation = True
@@ -183,7 +188,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
         self.load_segments_for_volume(volume_node, Path(file_path))
 
-    def on_load_segments_all_button(self):
+    def on_load_all_segments_button(self):
         load_dir = qt.QFileDialog().getExistingDirectory()
         if load_dir == '':
             return
@@ -195,6 +200,11 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
             # noinspection PyTypeChecker
             self.load_segments_for_volume(volume_node, segment_file_path)
+
+        try:
+            self.on_volume_node_changed(self._get_current_volume())
+        except VolumeNotSelected:
+            pass
 
     def load_segments_for_volume(
             self,
@@ -267,7 +277,25 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
         self._editor_ui.SegmentationNodeComboBox.setCurrentNode(seg_node_visible)
 
-    def change_volume(self, direction: str):
+    def on_close_current_volume(self):
+        try:
+            volume_node = self._get_current_volume(display_info=False)
+        except VolumeNotSelected:
+            return
+
+        seg_node = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode', volume_node.GetName())
+
+        if seg_node is not None:
+            if slicer.util.confirmOkCancelDisplay(
+                    windowTitle=f'Removing current volume {volume_node.GetName()}.',
+                    text=f'Do you want to discard existing segments?',
+            ):
+                slicer.mrmlScene.RemoveNode(volume_node)
+                slicer.mrmlScene.RemoveNode(seg_node)
+        else:
+            slicer.mrmlScene.RemoveNode(volume_node)
+
+    def on_change_volume(self, direction: str):
         nodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
 
         if len(nodes) == 0:
@@ -294,11 +322,12 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
         self._ui.volumeSelector.setCurrentNode(nodes[current_idx])
 
-    def _get_current_volume(self) -> vtkMRMLScalarVolumeNode:
+    def _get_current_volume(self, display_info=True) -> vtkMRMLScalarVolumeNode:
         volume_node_id = self._ui.volumeSelector.currentNodeID
 
         if volume_node_id == '':
-            slicer.util.infoDisplay(f'Please select volume.')
+            if display_info:
+                slicer.util.infoDisplay(f'Please select volume.')
             raise VolumeNotSelected()
 
         return slicer.util.getNode(volume_node_id)
@@ -308,8 +337,8 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
 
     def _setup_shortcuts(self):
         shortcuts = [
-            ['Ctrl+,', lambda: self.change_volume('prev')],
-            ['Ctrl+.', lambda: self.change_volume('next')]
+            ['Ctrl+,', lambda: self.on_change_volume('prev')],
+            ['Ctrl+.', lambda: self.on_change_volume('next')]
         ]
 
         for key, callback in shortcuts:
