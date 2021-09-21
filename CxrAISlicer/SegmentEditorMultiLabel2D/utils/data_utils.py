@@ -42,22 +42,12 @@ def load_segments_from_h5(
     for segment_name in sorted(seg_data):
         ds = seg_data[segment_name]
         mask_shape = ds.attrs['mask_shape']
-        mask_coords = ds.attrs['mask_coords']
         mask_arr = np.unpackbits(ds[:], count=int(np.prod(mask_shape))).reshape(mask_shape)
-
-        mask = np.zeros(shape=ds.attrs['volume_shape'], dtype=np.uint8)
-
-        # slice_start
-        ss = mask_coords
-        # slice_end
-        se = [c + s for c, s in zip(mask_coords, mask_shape)]
-
-        mask[ss[0]: se[0], ss[1]: se[1], ss[2]: se[2]] = mask_arr
 
         node_utils.create_new_segment(
             segment_name,
             seg_node,
-            mask if np.count_nonzero(mask) else None,
+            mask_arr if np.count_nonzero(mask_arr) else None,
             color=label_colors[segment_name]
         )
 
@@ -81,7 +71,6 @@ def write_segments_to_h5(
             ds.attrs['mask_shape'] = list(data['mask'].shape)
             # ds.attrs.create('color', data=np.array(data['segment'].GetColor(), dtype=float))
             ds.attrs['volume_shape'] = list(data['volume_shape'])
-            ds.attrs['mask_coords'] = list(data['coords'])
 
 
 def get_segments_data_for_volume(
@@ -102,15 +91,10 @@ def get_segments_data_for_volume(
         segment_id = seg_node.GetSegmentation().GetSegmentIdBySegmentName(segment.GetName())
 
         segment_mask: np.ndarray = slicer.util.arrayFromSegmentBinaryLabelmap(seg_node, segment_id)
-        segment_data: vtkOrientedImageData = seg_node.GetBinaryLabelmapInternalRepresentation(segment_id)
-        extent = segment_data.GetExtent()
-
-        coords = [extent[4], extent[2], extent[0]]
 
         all_segment_data[segment.GetName()] = dict(
             segment=segment,
             mask=segment_mask,
-            coords=coords,
             volume_shape=slicer.util.arrayFromVolume(volume_node).shape
         )
 
