@@ -1,5 +1,5 @@
 import slicer
-from MRMLCorePython import vtkMRMLSegmentationNode, vtkMRMLScalarVolumeNode
+from MRMLCorePython import vtkMRMLSegmentationNode, vtkMRMLScalarVolumeNode, vtkMRMLScene
 
 from zarr_io import SlicerSegmentZarrWriter, SlicerSegmentZarrReader
 
@@ -62,16 +62,19 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         self._editor_ui = None
         self._segment_labels: List[str] = None
 
+        self._scene: vtkMRMLScene = None
+
     def setup(self):
         """
         Called when the user opens the module the first time and the widget is initialized.
         """
+        self._scene: vtkMRMLScene = slicer.mrmlScene
 
         ui_widget = slicer.util.loadUI(self.resourcePath('UI/SegmentEditorMultiLabel2D.ui'))
         self.layout.addWidget(ui_widget)
         self._ui = slicer.util.childWidgetVariables(ui_widget)
 
-        ui_widget.setMRMLScene(slicer.mrmlScene)
+        ui_widget.setMRMLScene(self._scene)
 
         # Buttons
         self._ui.saveSegmentsButton.connect('clicked(bool)', self.on_save_segments_button)
@@ -89,15 +92,16 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         self._ui.volumeSelector.addEnabled = False
         self._ui.volumeSelector.removeEnabled = True
         self._ui.volumeSelector.showHidden = False
-        self._ui.volumeSelector.setMRMLScene(slicer.mrmlScene)
+        self._ui.volumeSelector.setMRMLScene(self._scene)
         self._ui.volumeSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.on_volume_node_changed)
 
         self.logic = SegmentEditorMultiLabel2DLogic()
 
         default_segment_editor_node = slicer.vtkMRMLSegmentEditorNode()
         default_segment_editor_node.SetOverwriteMode(slicer.vtkMRMLSegmentEditorNode.OverwriteNone)
-        slicer.mrmlScene.AddDefaultNode(default_segment_editor_node)
+        self._scene.AddDefaultNode(default_segment_editor_node)
 
+        # setup parent widget
         SegmentEditorWidget.setup(self)
         self._editor_ui = slicer.util.childWidgetVariables(self.editor)
 
@@ -109,7 +113,6 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         """
         Called when the application closes and the module widget is destroyed.
         """
-        self.removeObservers()
         SegmentEditorWidget.cleanup(self)
 
     def enter(self):
@@ -192,14 +195,27 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
         load_dir = qt.QFileDialog().getExistingDirectory()
         if load_dir == '':
             return
+        progress_dialog = slicer.util.createProgressDialog()
+        progress_dialog.setLabelText("Loading segments ...")
 
-        for name, volume_node in node_utils.get_nodes_by_class('vtkMRMLScalarVolumeNode').items():
+        progress_dialog.show()
+        progress_dialog.activateWindow()
+        progress_dialog.setValue(0)
+        slicer.app.processEvents()
+
+        named_volumes = node_utils.get_nodes_by_class('vtkMRMLScalarVolumeNode').items()
+        for i, (name, volume_node) in enumerate(named_volumes):
             segment_file_path = Path(load_dir, f'{Path(name).stem}.seg')
             if not segment_file_path.exists():
                 continue
 
             # noinspection PyTypeChecker
             self.load_segments_for_volume(volume_node, segment_file_path)
+
+            progress_dialog.setValue(int(i / len(named_volumes) * 100))
+            slicer.app.processEvents()
+
+        progress_dialog.close()
 
         try:
             self.on_volume_node_changed(self._get_current_volume())
@@ -221,7 +237,7 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
             ):
                 return
             else:
-                slicer.mrmlScene.RemoveNode(seg_node)
+                self._scene.RemoveNode(seg_node)
 
         seg_node = node_utils.create_segment_node_for_volume(volume_node)
 
@@ -290,10 +306,10 @@ class SegmentEditorMultiLabel2DWidget(SegmentEditorWidget):
                     windowTitle=f'Removing current volume {volume_node.GetName()}.',
                     text=f'Do you want to discard existing segments?',
             ):
-                slicer.mrmlScene.RemoveNode(volume_node)
-                slicer.mrmlScene.RemoveNode(seg_node)
+                self._scene.RemoveNode(volume_node)
+                self._scene.RemoveNode(seg_node)
         else:
-            slicer.mrmlScene.RemoveNode(volume_node)
+            self._scene.RemoveNode(volume_node)
 
     def on_change_volume(self, direction: str):
         nodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
