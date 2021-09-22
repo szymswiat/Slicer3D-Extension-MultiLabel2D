@@ -6,20 +6,17 @@ except ModuleNotFoundError:
     slicer.util.pip_install('zarr')
 
 import logging
-import requests
 import qt
 
 from typing import List, Dict, Optional
 from slicer.util import VTKObservationMixin
 from slicer.ScriptedLoadableModule import *
-from utils import node_utils, VolumeNotSelected
+from utils import node_utils, VolumeNotSelected, LabelManager
 from zarr_io import SlicerSegmentZarrWriter, SlicerSegmentZarrReader
 from MRMLCorePython import vtkMRMLSegmentationNode, vtkMRMLScalarVolumeNode, vtkMRMLScene
 from pathlib import Path
 
 logger = logging.getLogger('SegmentEditorMultiLabel2D')
-
-LABEL_LIST_URL = 'https://gist.github.com/Szymswiat/c3eaf19a87e6671194c9bea6ef48bc7c/raw'
 
 
 #
@@ -63,9 +60,9 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         self._vol_ui = None
         self._se_ui = None
 
-        self._segment_labels: List[str] = None
-
         self._scene: vtkMRMLScene = None
+
+        self._label_manager = LabelManager()
 
     def setup(self):
         """
@@ -92,7 +89,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         self.setup_self_ui()
         self.setup_ui_defaults()
 
-        self._setup_shortcuts()
+        self.setup_shortcuts()
 
         self.logic = SegmentEditorMultiLabel2DLogic()
 
@@ -100,16 +97,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         volumes_ui_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
         segment_editor_ui_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
 
-        self.fetch_label_list()
-
-    def cleanup(self):
-        """
-        Called when the application closes and the module widget is destroyed.
-        """
-        pass
-
-    def enter(self):
-        pass
+        self.fetch_labels()
 
     def setup_self_ui(self):
         # Buttons
@@ -130,51 +118,27 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         default_segment_editor_node.SetOverwriteMode(slicer.vtkMRMLSegmentEditorNode.OverwriteNone)
         self._scene.AddDefaultNode(default_segment_editor_node)
 
-    @property
-    def segment_labels(self) -> Optional[List[str]]:
-        if self._segment_labels is not None:
-            return self._segment_labels
-
-        labels_file_path = self._config_dir() / 'labels.txt'
+    def get_labels(self) -> Optional[List[str]]:
         try:
-            with open(labels_file_path, 'r') as f:
-                lines = [line.strip() for line in f.readlines()]
-                for line in lines:
-                    if len(line) > 100:
-                        raise ValueError()
-                self._segment_labels = list(sorted(lines))
-
-            return self._segment_labels
+            return self._label_manager.segment_labels
         except ValueError:
             slicer.util.errorDisplay('Invalid label list. Cannot initialize segmentation list.')
             return None
         except FileNotFoundError:
-            slicer.util.errorDisplay('Cannot fint label list file.')
+            slicer.util.errorDisplay('Cannot find label list file.')
             return None
 
-    def fetch_label_list(self):
-        response = requests.get(LABEL_LIST_URL)
+    def fetch_labels(self):
+        fetched = self._label_manager.fetch_labels()
 
-        if response.status_code != 200:
+        if fetched:
+            logger.info('Label list downloaded and saved.')
+        else:
             logger.error('Unable to fetch label list, please check your internet connection.')
-            return
-
-        labels = []
-        content = response.content.decode('UTF-8')
-        for line in content.split('\n'):
-            parts = line.split(',')
-            if parts[2].strip() == 'TRUE':
-                labels.append(parts[1] + '\n')
-
-        with open(self._config_dir() / 'labels.txt', 'w') as f:
-            f.writelines(sorted(labels))
-
-        logger.info('Label list downloaded and saved.')
-        self._segment_labels = None
 
     def on_save_segments_button(self):
         try:
-            volume_node = self._get_current_volume()
+            volume_node = self.get_current_volume()
         except VolumeNotSelected:
             return
 
@@ -203,7 +167,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
 
     def on_load_segments_button(self):
         try:
-            volume_node = self._get_current_volume()
+            volume_node = self.get_current_volume()
         except VolumeNotSelected:
             return
 
@@ -240,45 +204,17 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         progress_dialog.close()
 
         try:
-            self.on_volume_node_changed(self._get_current_volume())
+            self.on_volume_node_changed(self.get_current_volume())
         except VolumeNotSelected:
             pass
 
-    def load_segments_for_volume(
-            self,
-            volume_node: vtkMRMLScalarVolumeNode,
-            file_path: Path
-    ):
-        # noinspection PyTypeChecker
-        seg_node: vtkMRMLSegmentationNode = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode',
-                                                                          by_name=volume_node.GetName())
-        if seg_node is not None:
-            if not slicer.util.confirmOkCancelDisplay(
-                    windowTitle=f'Segmentation data exists for volume: {volume_node.GetName()}.',
-                    text=f'Existing segmentation data will be removed. Continue?',
-            ):
-                return
-            else:
-                self._scene.RemoveNode(seg_node)
-
-        seg_node = node_utils.create_segment_node_for_volume(volume_node)
-
-        labels = self.segment_labels
-        if labels is None:
-            return
-
-        with SlicerSegmentZarrReader(file_path) as reader:
-            reader.read_to_segmentation_node(seg_node, labels)
-
-        self._se_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
-
     def on_fill_segments_button(self):
         try:
-            volume_node = self._get_current_volume()
+            volume_node = self.get_current_volume()
         except VolumeNotSelected:
             return
 
-        labels = self.segment_labels
+        labels = self.get_labels()
         if labels is None:
             return
 
@@ -317,7 +253,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
 
     def on_close_current_volume(self):
         try:
-            volume_node = self._get_current_volume(display_info=False)
+            volume_node = self.get_current_volume(display_info=False)
         except VolumeNotSelected:
             return
 
@@ -362,7 +298,35 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         self._self_ui.volumeSelector.setCurrentNode(nodes[current_idx])
         self._vol_ui.ActiveVolumeNodeSelector.setCurrentNode(nodes[current_idx])
 
-    def _get_current_volume(self, display_info=True) -> vtkMRMLScalarVolumeNode:
+    def load_segments_for_volume(
+            self,
+            volume_node: vtkMRMLScalarVolumeNode,
+            file_path: Path
+    ):
+        # noinspection PyTypeChecker
+        seg_node: vtkMRMLSegmentationNode = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode',
+                                                                          by_name=volume_node.GetName())
+        if seg_node is not None:
+            if not slicer.util.confirmOkCancelDisplay(
+                    windowTitle=f'Segmentation data exists for volume: {volume_node.GetName()}.',
+                    text=f'Existing segmentation data will be removed. Continue?',
+            ):
+                return
+            else:
+                self._scene.RemoveNode(seg_node)
+
+        seg_node = node_utils.create_segment_node_for_volume(volume_node)
+
+        labels = self.get_labels()
+        if labels is None:
+            return
+
+        with SlicerSegmentZarrReader(file_path) as reader:
+            reader.read_to_segmentation_node(seg_node, labels)
+
+        self._se_ui.SegmentationNodeComboBox.setCurrentNode(seg_node)
+
+    def get_current_volume(self, display_info=True) -> vtkMRMLScalarVolumeNode:
         volume_node_id = self._self_ui.volumeSelector.currentNodeID
 
         if volume_node_id == '':
@@ -372,10 +336,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
 
         return slicer.util.getNode(volume_node_id)
 
-    def _config_dir(self) -> Path:
-        return Path(slicer.app.slicerUserSettingsFilePath).parent
-
-    def _setup_shortcuts(self):
+    def setup_shortcuts(self):
         shortcuts = [
             ['Ctrl+Left', lambda: self.on_change_volume('prev')],
             ['Ctrl+Right', lambda: self.on_change_volume('next')]
