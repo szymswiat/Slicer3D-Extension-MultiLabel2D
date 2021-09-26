@@ -1,4 +1,5 @@
 import slicer
+import vtk
 
 try:
     import zarr
@@ -239,6 +240,9 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         seg_nodes: Dict[str, vtkMRMLSegmentationNode] = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode')
         seg_node_visible: vtkMRMLSegmentationNode = seg_nodes.pop(volume_node.GetName(), None)
 
+        self._vol_ui.ActiveVolumeNodeSelector.setCurrentNode(volume_node)
+        self._self_ui.volumeSelector.setCurrentNode(volume_node)
+
         if seg_node_visible is None:
             self._se_ui.SegmentationNodeComboBox.setCurrentNode(None)
             for _, seg_node in seg_nodes.items():
@@ -277,8 +281,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
 
         volume_node_id = self._self_ui.volumeSelector.currentNodeID
         if volume_node_id == '':
-            self._self_ui.volumeSelector.setCurrentNode(nodes[0])
-            self._vol_ui.ActiveVolumeNodeSelector.setCurrentNode(nodes[0])
+            self.on_volume_node_changed(nodes[0])
             return
 
         current_idx = nodes.index(slicer.util.getNode(volume_node_id))
@@ -295,8 +298,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         if current_idx == len(nodes):
             current_idx = 0
 
-        self._self_ui.volumeSelector.setCurrentNode(nodes[current_idx])
-        self._vol_ui.ActiveVolumeNodeSelector.setCurrentNode(nodes[current_idx])
+        self.on_volume_node_changed(nodes[current_idx])
 
     def load_segments_for_volume(
             self,
@@ -346,6 +348,14 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
             shortcut = qt.QShortcut(slicer.util.mainWindow())
             shortcut.setKey(qt.QKeySequence(key))
             shortcut.connect("activated()", callback)
+
+        slice_view_widget = slicer.app.layoutManager().sliceWidget('Red')
+        dm = slice_view_widget.sliceView().displayableManagerByClassName('vtkMRMLScalarBarDisplayableManager')
+        w = dm.GetWindowLevelWidget()
+        w.SetEventTranslationClickAndDrag(w.WidgetStateIdle, vtk.vtkCommand.MiddleButtonPressEvent,
+                                          vtk.vtkEvent.AltModifier, w.WidgetStateAdjustWindowLevel,
+                                          w.WidgetEventAlwaysOnAdjustWindowLevelStart,
+                                          w.WidgetEventAlwaysOnAdjustWindowLevelEnd)
 
 
 #
