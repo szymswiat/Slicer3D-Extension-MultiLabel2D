@@ -17,6 +17,7 @@ class LabelManager:
 
         self._config_dir = Path(slicer.app.slicerUserSettingsFilePath).parent
 
+    # TODO: should handle case when during first setup there is no internet connection
     @property
     def segment_labels(self) -> List[str]:
         if self._segment_labels is not None:

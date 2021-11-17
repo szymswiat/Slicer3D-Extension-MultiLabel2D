@@ -73,6 +73,8 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
 
         self._scene: vtkMRMLScene = slicer.mrmlScene
 
+        self.setup_ui_defaults()
+
         ui_widget = slicer.util.loadUI(self.resourcePath('UI/SegmentEditorMultiLabel2D.ui'))
         volumes_ui_widget = slicer.modules.volumes.createNewWidgetRepresentation()
         segment_editor_ui_widget = slicer.modules.segmenteditor.createNewWidgetRepresentation()
@@ -88,7 +90,6 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         ui_widget.setMRMLScene(self._scene)
 
         self.setup_self_ui()
-        self.setup_ui_defaults()
 
         self.setup_shortcuts()
 
