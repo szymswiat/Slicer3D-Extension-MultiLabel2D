@@ -1,0 +1,3 @@
+[submodule "CxrAISlicer/SegmentEditorMultiLabel2D/mimage_utils"]
+	path = CxrAISlicer/SegmentEditorMultiLabel2D/mimage_utils
+	url = git@gitlab.com:cxrai/mimage-utils.git
