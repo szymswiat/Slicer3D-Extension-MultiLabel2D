@@ -2,10 +2,14 @@ import logging
 import os
 from pathlib import Path
 from typing import List
+
+from utils import run_with_interval_forever
 from utils.gitlab_snippets import *
 
 import requests
 import slicer
+import qt
+import time
 
 
 class LabelManager:
@@ -39,7 +43,7 @@ class LabelManager:
 
         if response.status_code != 200:
             self.create_empty_label_list_file()
-            logging.warning(f'Fetch labels status code: {response.status_code}')
+            logging.warning(f'Fetch labels error status code: {response.status_code}')
             logging.warning(response.content)
             return False
 
@@ -61,6 +65,14 @@ class LabelManager:
     def is_label_file_exist(self) -> bool:
         return os.path.isfile(self._config_file_path)
 
-    def create_empty_label_list_file(self):
-        if not self.is_label_file_exist():
-            open(self._config_file_path, 'a').close()
+    def create_empty_label_list_file(self, truncate=False):
+        if not self.is_label_file_exist() or truncate:
+            open(self._config_file_path, 'w').close()
+
+    def start_outdated_label_list_watcher(self, watch_interval=60, label_list_outdated=3600):
+        def watch():
+            if time.time() - os.path.getmtime(self._config_file_path) > label_list_outdated:
+                logging.info('Clearing outdated label list file.')
+                self.create_empty_label_list_file(truncate=True)
+
+        run_with_interval_forever(watch, watch_interval)

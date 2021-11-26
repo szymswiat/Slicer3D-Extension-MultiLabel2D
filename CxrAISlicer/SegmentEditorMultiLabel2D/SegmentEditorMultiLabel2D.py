@@ -13,7 +13,7 @@ import threading
 from typing import List, Dict, Optional
 from slicer.util import VTKObservationMixin
 from slicer.ScriptedLoadableModule import *
-from utils import node_utils, VolumeNotSelected, LabelManager
+from utils import node_utils, VolumeNotSelected, LabelManager, run_with_interval_forever
 from zarr_io import SlicerSegmentZarrWriter, SlicerSegmentZarrReader
 from MRMLCorePython import vtkMRMLSegmentationNode, vtkMRMLScalarVolumeNode, vtkMRMLScene
 from pathlib import Path
@@ -99,12 +99,10 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         volumes_ui_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
         segment_editor_ui_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
 
+        self._label_manager.start_outdated_label_list_watcher()
         # fetch labels with 3 minutes interval
         qt.QTimer.singleShot(1, lambda: self.fetch_labels(show_warning=True))
-        self._periodic_label_downloader = qt.QTimer()
-        self._periodic_label_downloader.timeout.connect(self.fetch_labels)
-        self._periodic_label_downloader.setInterval(30000)
-        self._periodic_label_downloader.start()
+        run_with_interval_forever(self.fetch_labels, 30)
 
     def setup_self_ui(self):
         # Buttons
