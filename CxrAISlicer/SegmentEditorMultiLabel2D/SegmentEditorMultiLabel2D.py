@@ -107,6 +107,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
     def setup_self_ui(self):
         # Buttons
         self._self_ui.saveSegmentsButton.connect('clicked(bool)', self.on_save_segments_button)
+        self._self_ui.saveAllSegmentsButton.connect('clicked(bool)', self.on_save_all_segments_button)
         self._self_ui.loadSegmentsButton.connect('clicked(bool)', self.on_load_segments_button)
         self._self_ui.loadAllSegmentsButton.connect('clicked(bool)', self.on_load_all_segments_button)
         self._self_ui.fillSegmentsButton.connect('clicked(bool)', self.on_fill_segments_button)
@@ -156,11 +157,11 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         if save_dir == '':
             return
 
-        mask_file_name = Path(save_dir, f'{Path(volume_node.GetName()).stem}.seg')
-        if mask_file_name.exists():
+        mask_file_path = Path(save_dir, f'{Path(volume_node.GetName()).stem}.seg')
+        if mask_file_path.exists():
             if not slicer.util.confirmOkCancelDisplay(
                     windowTitle='File already exists.',
-                    text=f'File {mask_file_name.name} found under selected directory {mask_file_name.parent}. '
+                    text=f'File {mask_file_path.name} found under selected directory {mask_file_path.parent}. '
                          f'Do you want to override it?',
             ):
                 return
@@ -172,8 +173,47 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
             slicer.util.errorDisplay(f'There is no segmentation node for current volume node.')
             return
 
-        with SlicerSegmentZarrWriter(mask_file_name) as writer:
+        with SlicerSegmentZarrWriter(mask_file_path) as writer:
             writer.write_segmentation_node(seg_node)
+
+    def on_save_all_segments_button(self):
+
+        # noinspection PyTypeChecker
+        seg_nodes: Dict[str, vtkMRMLSegmentationNode] = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode')
+
+        if len(seg_nodes) == 0:
+            slicer.util.infoDisplay('There are no segmentations to save.')
+            return
+
+        save_dir = qt.QFileDialog().getExistingDirectory()
+        if save_dir == '':
+            return
+
+        override_all = False
+        display_override_all = True
+        out_seg_file_names = []
+        for mask_name, seg_node in seg_nodes.items():
+            mask_file_path = Path(save_dir, f'{Path(mask_name).stem}.seg')
+            if mask_file_path.exists() and not override_all:
+                if slicer.util.confirmOkCancelDisplay(
+                        windowTitle='File already exists.',
+                        text=f'File {mask_file_path.name} found under selected directory {mask_file_path.parent}. '
+                             f'Do you want to override it?',
+                ):
+                    if display_override_all and slicer.util.confirmOkCancelDisplay(
+                        windowTitle='Override all.',
+                        text=f'Do you want to override all files?',
+                    ):
+                        override_all = True
+                    else:
+                        display_override_all = False
+                else:
+                    continue
+            with SlicerSegmentZarrWriter(mask_file_path) as writer:
+                out_seg_file_names.append(mask_file_path.name)
+                writer.write_segmentation_node(seg_node)
+        seg_names_str = '\n'.join(out_seg_file_names)
+        slicer.util.infoDisplay(f"Following files have been saved:\n {seg_names_str}.")
 
     def on_load_segments_button(self):
         try:

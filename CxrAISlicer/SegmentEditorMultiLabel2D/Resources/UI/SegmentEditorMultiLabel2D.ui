@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>410</width>
-    <height>151</height>
+    <height>182</height>
    </rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
@@ -95,13 +95,6 @@
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_2">
      <item>
-      <widget class="QPushButton" name="saveSegmentsButton">
-       <property name="text">
-        <string>Save segmets</string>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QPushButton" name="loadSegmentsButton">
        <property name="text">
         <string>Load segments</string>
@@ -112,6 +105,24 @@
       <widget class="QPushButton" name="loadAllSegmentsButton">
        <property name="text">
         <string>Load many segments</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_4">
+     <item>
+      <widget class="QPushButton" name="saveSegmentsButton">
+       <property name="text">
+        <string>Save segmets</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="saveAllSegmentsButton">
+       <property name="text">
+        <string>Save all segments</string>
        </property>
       </widget>
      </item>
