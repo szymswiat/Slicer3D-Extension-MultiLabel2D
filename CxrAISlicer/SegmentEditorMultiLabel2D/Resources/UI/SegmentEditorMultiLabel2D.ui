@@ -120,6 +120,13 @@
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
+      <widget class="QPushButton" name="syncLabelListButton">
+       <property name="text">
+        <string>Sync label list</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="fillSegmentsButton">
        <property name="text">
         <string>Fill segments</string>

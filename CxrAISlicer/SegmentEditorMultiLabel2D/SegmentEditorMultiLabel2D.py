@@ -8,6 +8,7 @@ except ModuleNotFoundError:
 
 import logging
 import qt
+import threading
 
 from typing import List, Dict, Optional
 from slicer.util import VTKObservationMixin
@@ -16,8 +17,6 @@ from utils import node_utils, VolumeNotSelected, LabelManager
 from zarr_io import SlicerSegmentZarrWriter, SlicerSegmentZarrReader
 from MRMLCorePython import vtkMRMLSegmentationNode, vtkMRMLScalarVolumeNode, vtkMRMLScene
 from pathlib import Path
-
-logger = logging.getLogger('SegmentEditorMultiLabel2D')
 
 
 #
@@ -64,6 +63,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         self._scene: vtkMRMLScene = None
 
         self._label_manager = LabelManager()
+        self._periodic_label_downloader: threading.Timer = None
 
     def setup(self):
         """
@@ -99,7 +99,12 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         volumes_ui_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
         segment_editor_ui_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
 
-        self.fetch_labels()
+        # fetch labels with 3 minutes interval
+        qt.QTimer.singleShot(1, lambda: self.fetch_labels(show_warning=True))
+        self._periodic_label_downloader = qt.QTimer()
+        self._periodic_label_downloader.timeout.connect(self.fetch_labels)
+        self._periodic_label_downloader.setInterval(30000)
+        self._periodic_label_downloader.start()
 
     def setup_self_ui(self):
         # Buttons
@@ -107,6 +112,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         self._self_ui.loadSegmentsButton.connect('clicked(bool)', self.on_load_segments_button)
         self._self_ui.loadAllSegmentsButton.connect('clicked(bool)', self.on_load_all_segments_button)
         self._self_ui.fillSegmentsButton.connect('clicked(bool)', self.on_fill_segments_button)
+        self._self_ui.syncLabelListButton.connect('clicked(bool)', self.on_sync_labels_button)
 
         self._self_ui.prevVolumeButton.connect('clicked(bool)', lambda: self.on_change_volume('prev'))
         self._self_ui.nextVolumeButton.connect('clicked(bool)', lambda: self.on_change_volume('next'))
@@ -130,13 +136,17 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
             slicer.util.errorDisplay('Cannot find label list file.')
             return None
 
-    def fetch_labels(self):
+    def fetch_labels(self, show_warning=False):
         fetched = self._label_manager.fetch_labels()
 
         if fetched:
-            logger.info('Label list downloaded and saved.')
+            logging.info('Label list downloaded and saved.')
         else:
-            logger.error('Unable to fetch label list, please check your internet connection.')
+            msg = 'Unable to fetch label list. Please check your internet connection.'
+            if show_warning:
+                slicer.util.warningDisplay(msg)
+            else:
+                logging.warning(msg)
 
     def on_save_segments_button(self):
         try:
@@ -211,6 +221,20 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
             pass
 
     def on_fill_segments_button(self):
+        self.fill_segments_for_current_node()
+
+    def on_sync_labels_button(self):
+        def sync():
+            fetched = self._label_manager.fetch_labels()
+
+            if fetched:
+                slicer.util.infoDisplay('Label list downloaded and saved.')
+            else:
+                slicer.util.warningDisplay('Unable to fetch label list. Please check your internet connection.')
+
+        qt.QTimer.singleShot(1, sync)
+
+    def fill_segments_for_current_node(self):
         try:
             volume_node = self.get_current_volume()
         except VolumeNotSelected:
@@ -231,18 +255,19 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
 
     def on_volume_node_changed(self, volume_node: vtkMRMLScalarVolumeNode):
         if volume_node is None:
-            logger.error(f'No scalar volume selected.')
+            logging.error(f'No scalar volume selected.')
             return
-        logger.info(f'Selected scalar volume: {volume_node.GetName()}.')
+        # logging.info(f'Selected scalar volume: {volume_node.GetName()}.')
+        self._vol_ui.ActiveVolumeNodeSelector.setCurrentNode(volume_node)
+        self._self_ui.volumeSelector.setCurrentNode(volume_node)
+
+        self.fill_segments_for_current_node()
 
         slicer.util.setSliceViewerLayers(background=volume_node)
 
         # noinspection PyTypeChecker
         seg_nodes: Dict[str, vtkMRMLSegmentationNode] = node_utils.get_nodes_by_class('vtkMRMLSegmentationNode')
         seg_node_visible: vtkMRMLSegmentationNode = seg_nodes.pop(volume_node.GetName(), None)
-
-        self._vol_ui.ActiveVolumeNodeSelector.setCurrentNode(volume_node)
-        self._self_ui.volumeSelector.setCurrentNode(volume_node)
 
         if seg_node_visible is None:
             self._se_ui.SegmentationNodeComboBox.setCurrentNode(None)

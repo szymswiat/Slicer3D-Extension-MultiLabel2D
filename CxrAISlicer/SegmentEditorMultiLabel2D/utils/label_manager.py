@@ -1,31 +1,27 @@
 import logging
+import os
 from pathlib import Path
 from typing import List
+from utils.gitlab_snippets import *
 
 import requests
 import slicer
 
-logger = logging.getLogger('LabelManager')
-
 
 class LabelManager:
-    URL = 'https://gitlab.com/api/v4/projects/cxrai%2Fcxrai-slicer/snippets/2178847/raw'
-    API_KEY = 'CzsC8d_HeS-Z49Histce'
 
     def __init__(self):
         self._segment_labels: List[str] = None
 
         self._config_dir = Path(slicer.app.slicerUserSettingsFilePath).parent
+        self._config_file_path = self._config_dir / 'labels.txt'
 
-    # TODO: should handle case when during first setup there is no internet connection
     @property
     def segment_labels(self) -> List[str]:
         if self._segment_labels is not None:
             return self._segment_labels
 
-        labels_file_path = self._config_dir / 'labels.txt'
-
-        with open(labels_file_path, 'r') as f:
+        with open(self._config_file_path, 'r') as f:
             lines = [line.strip() for line in f.readlines()]
             for line in lines:
                 if len(line) > 100:
@@ -35,9 +31,16 @@ class LabelManager:
         return self._segment_labels
 
     def fetch_labels(self) -> bool:
-        response = requests.get(self.URL, headers={'PRIVATE-TOKEN': self.API_KEY})
+        try:
+            response = requests.get(URL_LABEL_LIST, headers={'PRIVATE-TOKEN': API_KEY})
+        except requests.exceptions.ConnectionError:
+            self.create_empty_label_list_file()
+            return False
 
         if response.status_code != 200:
+            self.create_empty_label_list_file()
+            logging.warning(f'Fetch labels status code: {response.status_code}')
+            logging.warning(response.content)
             return False
 
         labels = []
@@ -49,8 +52,15 @@ class LabelManager:
             if parts[2].strip() == 'TRUE':
                 labels.append(parts[1] + '\n')
 
-        with open(self._config_dir / 'labels.txt', 'w') as f:
+        with open(self._config_file_path, 'w') as f:
             f.writelines(sorted(labels))
 
         self._segment_labels = None
         return True
+
+    def is_label_file_exist(self) -> bool:
+        return os.path.isfile(self._config_file_path)
+
+    def create_empty_label_list_file(self):
+        if not self.is_label_file_exist():
+            open(self._config_file_path, 'a').close()
