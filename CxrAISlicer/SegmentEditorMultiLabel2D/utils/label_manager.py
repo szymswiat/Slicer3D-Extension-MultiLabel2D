@@ -1,15 +1,14 @@
-import logging
 import os
-from pathlib import Path
-from typing import List
-
-from utils import run_with_interval_forever
-from utils.gitlab_snippets import *
-
-import requests
-import slicer
-import qt
 import time
+import slicer
+import logging
+import requests
+
+from typing import List
+from pathlib import Path
+
+from utils.gitlab_snippets import *
+from utils import run_with_interval_forever
 
 
 class LabelManager:

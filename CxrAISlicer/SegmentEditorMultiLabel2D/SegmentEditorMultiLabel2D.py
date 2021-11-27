@@ -102,7 +102,7 @@ class SegmentEditorMultiLabel2DWidget(ScriptedLoadableModuleWidget, VTKObservati
         self._label_manager.start_outdated_label_list_watcher()
         # fetch labels with 3 minutes interval
         qt.QTimer.singleShot(1, lambda: self.fetch_labels(show_warning=True))
-        run_with_interval_forever(self.fetch_labels, 30)
+        run_with_interval_forever(self.fetch_labels, 3 * 60)
 
     def setup_self_ui(self):
         # Buttons
