@@ -1,10 +1,10 @@
 #!/bin/bash
 
 mkdir ./tmp
-mkdir ./tmp/CxrAISlicer
+mkdir ./tmp/MultiLabel2D
 
-cp -r ./CxrAISlicer/SegmentEditorMultiLabel2D ./tmp/CxrAISlicer
+cp -r ./MultiLabel2D/SegmentEditorMultiLabel2D ./tmp/MultiLabel2D
 
-(cd ./tmp; zip -rq CxrAISlicer.zip ./CxrAISlicer)
+(cd ./tmp; zip -rq MultiLabel2D.zip ./MultiLabel2D)
 
-rm -rf ./tmp/CxrAISlicer
+rm -rf ./tmp/MultiLabel2D

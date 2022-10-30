@@ -31,7 +31,7 @@ class SegmentEditorMultiLabel2D(ScriptedLoadableModule):
     def __init__(self, parent):
         ScriptedLoadableModule.__init__(self, parent)
         self.parent.title = "Segment Editor Multi-Label 2D"
-        self.parent.categories = ['', 'CxrAI']
+        self.parent.categories = ['']
         self.parent.dependencies = ['SegmentEditor', 'Segmentations']
         self.parent.contributors = ["szymswiat"]
         self.parent.helpText = 'SegmentEditorMultiLabel2D'

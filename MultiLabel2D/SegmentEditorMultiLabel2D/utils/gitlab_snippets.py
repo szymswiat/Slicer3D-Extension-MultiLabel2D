@@ -1,0 +1,5 @@
+API_KEY = ''
+
+URL_LABEL_LIST = ''
+
+URL_LABEL_LIST_TEST = ''
