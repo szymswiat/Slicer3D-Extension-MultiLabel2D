@@ -7,7 +7,7 @@ from MRMLCorePython import vtkMRMLSegmentationNode
 from vtkSegmentationCorePython import vtkSegmentation
 
 from utils import node_utils, generate_colors
-from mimage_utils.common.zarr_io.segmentation_zarr_io import SegmentationZarrReader, SegmentationZarrWriter
+from zarr_io import SegmentationZarrReader, SegmentationZarrWriter
 
 
 class SlicerSegmentZarrReader(SegmentationZarrReader):
